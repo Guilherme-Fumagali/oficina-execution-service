@@ -24,7 +24,7 @@ Serviço de execução do sistema de gestão de oficina mecânica, desenvolvido 
 | Contrato AsyncAPI 2.6 | [`docs/asyncapi.yaml`](docs/asyncapi.yaml), visualizável no [AsyncAPI Studio](https://studio.asyncapi.com/?url=https://raw.githubusercontent.com/Guilherme-Fumagali/oficina-execution-service/develop/docs/asyncapi.yaml) |
 | Coleção Postman | [`docs/postman/execution.postman_collection.json`](docs/postman/execution.postman_collection.json) |
 | Swagger UI | `http://localhost:8082/swagger-ui.html` na execução local |
-| Decisões de arquitetura da fase | ADR-016 a ADR-025, em `docs/tech-challenge-4` do repositório tech-challenge-1 |
+| Decisões de arquitetura da fase | [ADR-016 a ADR-025](https://github.com/Guilherme-Fumagali/tech-challenge-1/blob/develop/docs/tech-challenge-4/adrs/README.md), em `docs/tech-challenge-4` do repositório tech-challenge-1 |
 | Vídeo de demonstração | a publicar |
 
 ## Arquitetura
