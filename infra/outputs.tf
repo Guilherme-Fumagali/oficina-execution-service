@@ -15,5 +15,5 @@ output "papel_pod_arn" {
 
 output "docdb_endpoint" {
   description = "Endereco do cluster DocumentDB, publicado tambem no SSM."
-  value       = aws_ssm_parameter.docdb_endpoint.value
+  value       = "${aws_docdb_cluster.execucao.endpoint}:${aws_docdb_cluster.execucao.port}"
 }
