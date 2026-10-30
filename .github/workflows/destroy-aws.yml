@@ -1,0 +1,70 @@
+name: Destroy AWS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+
+jobs:
+  destroy:
+    name: Destroy (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - run: terraform init -backend-config="key=execution/${AMBIENTE}/terraform.tfstate"
+
+      - name: Destroy
+        env:
+          TF_VAR_ambiente: ${{ env.AMBIENTE }}
+        run: terraform destroy -auto-approve
+
+      - name: Conferir que banco e filas foram removidos
+        run: |
+          CLUSTER="oficina-execution-docdb-${AMBIENTE}"
+          RESTANTE=$(aws docdb describe-db-clusters \
+            --query "DBClusters[?DBClusterIdentifier=='${CLUSTER}'].[DBClusterIdentifier,Status]" --output text)
+          INSTANCIAS=$(aws docdb describe-db-instances \
+            --query "DBInstances[?starts_with(DBInstanceIdentifier, '${CLUSTER}')].DBInstanceIdentifier" --output text)
+          if [ -n "$RESTANTE" ] || [ -n "$INSTANCIAS" ]; then
+            echo "::error::DocumentDB ainda existe: ${RESTANTE} ${INSTANCIAS}"
+            exit 1
+          fi
+          echo "DocumentDB ${CLUSTER} removido."
+          for FILA in "oficina-${AMBIENTE}-execution-comandos" "oficina-${AMBIENTE}-execution-comandos-dlq"; do
+            REMOVIDA=false
+            for TENTATIVA in $(seq 1 12); do
+              if SAIDA=$(aws sqs get-queue-url --queue-name "$FILA" 2>&1); then
+                sleep 10
+              elif grep -q -E 'NonExistentQueue|QueueDoesNotExist' <<<"$SAIDA"; then
+                REMOVIDA=true
+                break
+              else
+                echo "$SAIDA"
+                exit 1
+              fi
+            done
+            if [ "$REMOVIDA" != true ]; then
+              echo "::error::Fila ${FILA} ainda existe."
+              exit 1
+            fi
+            echo "Fila ${FILA} removida."
+          done
