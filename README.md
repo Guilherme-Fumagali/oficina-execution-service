@@ -87,7 +87,7 @@ A saga da ordem de serviço é orquestrada pelo OS Service (ADR-017). O Executio
 | Falha na execução | mecânico (REST) | `FALHOU`, com motivo | `ExecucaoFalhou` (o OS inicia a compensação `FALHA_EXECUCAO`) |
 | Compensação (reprovação, rejeição, pagamento recusado) | `CancelarExecucao` | `CANCELADA` | `ExecucaoCancelada` |
 
-Na classificação de Richardson documentada no OS Service, o enfileiramento do diagnóstico é passo compensável (desfeito por `CancelarExecucao`), e o enfileiramento do reparo e a finalização são passos retentáveis: falha técnica é repetida pela fila, e falha de negócio do reparo gera `ExecucaoFalhou`.
+O enfileiramento do diagnóstico é desfeito por `CancelarExecucao`. Falha técnica é repetida pela fila; falha de negócio no reparo gera `ExecucaoFalhou`, e o OS Service inicia as compensações.
 
 ```mermaid
 stateDiagram-v2
