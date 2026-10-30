@@ -20,7 +20,7 @@ FROM newrelic/newrelic-java-init:9.4.0 AS newrelic
 
 FROM eclipse-temurin:21.0.11_10-jre-alpine
 WORKDIR /app
-RUN addgroup -S spring && adduser -S spring -G spring
+RUN addgroup -S -g 10001 spring && adduser -S -u 10001 -G spring spring
 COPY --from=builder --chown=spring:spring /app/target/*.jar app.jar
 COPY --from=newrelic --chown=spring:spring /newrelic-agent.jar /newrelic/newrelic.jar
 COPY --chown=spring:spring newrelic.yml /newrelic/newrelic.yml
