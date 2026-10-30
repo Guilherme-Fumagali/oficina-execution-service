@@ -356,7 +356,7 @@ Workflows em [`.github/workflows`](.github/workflows):
 | Workflow | Job | Quando executa | O que faz |
 |---|---|---|---|
 | `ci-cd.yml` | Build & Test | todo push e todo pull request | `./mvnw -B verify`: compila, executa **todos os testes** (unitários e de integração com Testcontainers), confere o contrato `docs/openapi.json`, aplica os limites do JaCoCo, publica o relatório como artefato e o resumo de cobertura no job |
-| `ci-cd.yml` | SonarCloud | pull request e push em `develop` e `main` | análise estática e cobertura, com quality gate bloqueante (`sonar.qualitygate.wait=true`) |
+| `ci-cd.yml` | SonarCloud | todo push; analisa a branch como pull request quando há PR aberto, e a `main` | análise estática e cobertura, com quality gate bloqueante (`sonar.qualitygate.wait=true`) |
 | `ci-cd.yml` | Build & push no ECR | push em `develop` ou `main`, com os dois jobs anteriores aprovados | imagem com tags `<sha>` e `latest` no ECR do ambiente; pula com aviso se o ECR não existir |
 | `ci-cd.yml` | Conferir cluster | após o push da imagem | pula com aviso se o cluster do ambiente estiver desligado |
 | `ci-cd.yml` | Deploy no EKS | cluster existente | cria o Secret `execution-service-secrets` com `MONGODB_URI` (montada a partir de `docdb-*`), `JWT_SECRET` e `NEW_RELIC_LICENSE_KEY` lidos do SSM, troca a imagem com `kustomize edit set image`, aplica o overlay, aguarda o rollout e executa o smoke em `/actuator/health/readiness` e `/actuator/info`; em produção, aguarda aprovação |
@@ -364,7 +364,7 @@ Workflows em [`.github/workflows`](.github/workflows):
 | `infra.yml` | Plan / Apply | `workflow_dispatch` em `develop` ou `main` | plan e, com `acao=apply`, apply no GitHub Environment do ambiente; pula com aviso se a rede não existir |
 | `destroy-aws.yml` | Destroy | `workflow_dispatch` | `terraform destroy` e conferência de que o cluster DocumentDB, as instâncias e as filas foram removidos |
 
-Os testes rodam em todo push e em todo pull request. O deploy só acontece depois de **Build & Test** e **SonarCloud** aprovados. A autenticação na AWS usa OIDC com a role `oficina-execution-service-github-actions`, sem chave de acesso estática, e os segredos da aplicação são lidos do SSM no momento do deploy. As branches `develop` e `main` são protegidas pelo ruleset `protecao-main-develop`: sem push direto, merge somente por pull request com uma aprovação e com os checks **Build & Test**, **SonarCloud** e **Format & validate (infra)** concluídos com sucesso, sem force push e sem exclusão.
+Os testes rodam em todo push. O deploy só acontece depois de **Build & Test** e **SonarCloud** aprovados. A autenticação na AWS usa OIDC com a role `oficina-execution-service-github-actions`, sem chave de acesso estática, e os segredos da aplicação são lidos do SSM no momento do deploy. As branches `develop` e `main` são protegidas pelo ruleset `protecao-main-develop`: sem push direto, merge somente por pull request com uma aprovação e com os checks **Build & Test**, **SonarCloud** e **Format & validate (infra)** concluídos com sucesso, sem force push e sem exclusão.
 
 ## Testes
 
