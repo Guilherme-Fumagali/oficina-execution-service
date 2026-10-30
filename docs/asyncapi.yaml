@@ -1,0 +1,718 @@
+asyncapi: 2.6.0
+info:
+  title: Execution Service — mensageria
+  version: 1.0.0
+  description: |
+    Contrato assíncrono do Execution Service da oficina mecânica (Tech Challenge Fase 4, PosTech FIAP),
+    derivado da SPEC-08. O serviço consome comandos do orquestrador da saga (OS Service) na fila
+    `oficina-{env}-execution-comandos` e publica respostas e eventos na fila `oficina-{env}-os-eventos`.
+
+    Toda mensagem é um envelope JSON UTF-8 no corpo da mensagem SQS, com os atributos `tipo` e `versao`.
+    O consumo é idempotente por `mensagemId` (inbox `mensagensProcessadas`) e os comandos são
+    idempotentes pela chave de negócio `osId`: um comando repetido com `mensagemId` novo recebe a mesma
+    resposta de negócio. A publicação usa Transactional Outbox (coleção `outbox`).
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+defaultContentType: application/json
+servers:
+  aws:
+    url: sqs.us-east-1.amazonaws.com
+    protocol: sqs
+    description: Amazon SQS na conta do projeto (filas padrão com SSE-SQS e DLQ após 5 recebimentos).
+  local:
+    url: localhost:4566
+    protocol: sqs
+    description: LocalStack 3 do docker-compose, com `{env}` = `local`.
+channels:
+  oficina-{env}-execution-comandos:
+    description: Comandos enviados pelo orquestrador do OS Service ao Execution Service.
+    parameters:
+      env:
+        $ref: '#/components/parameters/env'
+    publish:
+      operationId: receberComando
+      summary: Comandos consumidos pelo Execution Service.
+      description: |
+        Rejeição de negócio responde `ComandoRejeitado` e reconhece a mensagem. Falha técnica ou corpo
+        que não é um envelope válido não reconhece a mensagem: ela volta após a visibilidade (30 s) e,
+        após 5 recebimentos, segue para `oficina-{env}-execution-comandos-dlq`.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/IniciarDiagnostico'
+          - $ref: '#/components/messages/ReabrirDiagnostico'
+          - $ref: '#/components/messages/IniciarReparo'
+          - $ref: '#/components/messages/CancelarExecucao'
+  oficina-{env}-os-eventos:
+    description: Respostas aos comandos e eventos da execução destinados ao orquestrador do OS Service.
+    parameters:
+      env:
+        $ref: '#/components/parameters/env'
+    subscribe:
+      operationId: publicarEvento
+      summary: Eventos publicados pelo Execution Service por meio do outbox.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExecucaoEnfileirada'
+          - $ref: '#/components/messages/DiagnosticoIniciado'
+          - $ref: '#/components/messages/DiagnosticoConcluido'
+          - $ref: '#/components/messages/ReparoIniciado'
+          - $ref: '#/components/messages/ExecucaoFinalizada'
+          - $ref: '#/components/messages/ExecucaoFalhou'
+          - $ref: '#/components/messages/ExecucaoCancelada'
+          - $ref: '#/components/messages/ComandoRejeitado'
+components:
+  parameters:
+    env:
+      description: Ambiente (`local` no docker-compose e nos testes).
+      schema:
+        type: string
+        enum:
+          - local
+          - staging
+          - prod
+  messageTraits:
+    atributosSqs:
+      headers:
+        type: object
+        required:
+          - tipo
+          - versao
+        properties:
+          tipo:
+            type: string
+            description: Nome do tipo da mensagem, igual ao campo `tipo` do envelope.
+          versao:
+            type: string
+            description: Versão do contrato do tipo.
+          newrelic:
+            type: string
+            description: Cabeçalho de rastreamento distribuído do New Relic, quando o agente está ativo.
+          traceparent:
+            type: string
+            description: Cabeçalho W3C Trace Context, quando o agente está ativo.
+          tracestate:
+            type: string
+            description: Cabeçalho W3C Trace Context, quando o agente está ativo.
+  schemas:
+    Envelope:
+      type: object
+      required:
+        - mensagemId
+        - tipo
+        - versao
+        - osId
+        - origem
+        - ocorridoEm
+        - dados
+      properties:
+        mensagemId:
+          type: string
+          format: uuid
+          description: UUID v4 novo por envio; chave da inbox do consumidor.
+        tipo:
+          type: string
+        versao:
+          type: integer
+          minimum: 1
+        sagaId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Copiado do comando em toda resposta e em todo evento da mesma OS.
+        osId:
+          type: string
+          format: uuid
+          description: Chave de negócio; também é o `_id` do documento de execução.
+        causadaPor:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: '`mensagemId` do comando que originou a resposta; `null` em eventos disparados por pessoa.'
+        origem:
+          type: string
+          enum:
+            - os-service
+            - billing-service
+            - execution-service
+        ocorridoEm:
+          type: string
+          format: date-time
+          description: Instante UTC em ISO-8601 com `Z`.
+        dados:
+          type: object
+    Etapa:
+      type: string
+      enum:
+        - DIAGNOSTICO
+        - REPARO
+    Veiculo:
+      type: object
+      required:
+        - placa
+      properties:
+        placa:
+          type: string
+        marca:
+          type: string
+        modelo:
+          type: string
+        anoFabricacao:
+          type: integer
+    ItemReparo:
+      type: object
+      required:
+        - tipo
+        - descricao
+        - quantidade
+      properties:
+        tipo:
+          type: string
+          enum:
+            - SERVICO
+            - PECA
+        descricao:
+          type: string
+        quantidade:
+          type: integer
+          minimum: 1
+    DadosIniciarDiagnostico:
+      type: object
+      required:
+        - clienteId
+        - veiculo
+      properties:
+        clienteId:
+          type: string
+          format: uuid
+        veiculo:
+          $ref: '#/components/schemas/Veiculo'
+        abertaEm:
+          type: string
+          format: date-time
+    DadosMotivo:
+      type: object
+      properties:
+        motivo:
+          type: string
+    DadosIniciarReparo:
+      type: object
+      required:
+        - itens
+      properties:
+        itens:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemReparo'
+    DadosExecucaoEnfileirada:
+      type: object
+      required:
+        - etapa
+        - enfileiradaEm
+      properties:
+        etapa:
+          $ref: '#/components/schemas/Etapa'
+        enfileiradaEm:
+          type: string
+          format: date-time
+    DadosInicioMecanico:
+      type: object
+      required:
+        - mecanicoId
+        - iniciadoEm
+      properties:
+        mecanicoId:
+          type: string
+          format: uuid
+        iniciadoEm:
+          type: string
+          format: date-time
+    DadosDiagnosticoConcluido:
+      type: object
+      required:
+        - mecanicoId
+        - concluidoEm
+        - observacoes
+      properties:
+        mecanicoId:
+          type: string
+          format: uuid
+        concluidoEm:
+          type: string
+          format: date-time
+        observacoes:
+          type: string
+    DadosExecucaoFinalizada:
+      type: object
+      required:
+        - mecanicoId
+        - finalizadaEm
+      properties:
+        mecanicoId:
+          type: string
+          format: uuid
+        finalizadaEm:
+          type: string
+          format: date-time
+    DadosExecucaoFalhou:
+      type: object
+      required:
+        - mecanicoId
+        - motivo
+        - ocorridaEm
+      properties:
+        mecanicoId:
+          type: string
+          format: uuid
+        motivo:
+          type: string
+        ocorridaEm:
+          type: string
+          format: date-time
+    DadosExecucaoCancelada:
+      type: object
+      required:
+        - canceladaEm
+      properties:
+        motivo:
+          type:
+            - string
+            - 'null'
+        canceladaEm:
+          type: string
+          format: date-time
+    DadosComandoRejeitado:
+      type: object
+      required:
+        - comando
+        - motivo
+        - codigo
+      properties:
+        comando:
+          type: string
+          description: Tipo do comando rejeitado.
+        motivo:
+          type: string
+        codigo:
+          type: string
+          enum:
+            - EXECUCAO_INEXISTENTE
+            - ESTADO_INVALIDO
+            - DADOS_INVALIDOS
+            - COMANDO_DESCONHECIDO
+  messages:
+    IniciarDiagnostico:
+      name: IniciarDiagnostico
+      title: Iniciar diagnóstico
+      summary: Coloca a OS na fila de diagnóstico. Resposta esperada `ExecucaoEnfileirada{etapa=DIAGNOSTICO}`.
+      description: |
+        Cria o documento `execucoes` com `_id = osId` em `AGUARDANDO_DIAGNOSTICO`. Se a execução já
+        existir, responde de novo `ExecucaoEnfileirada` com o instante original de entrada na fila.
+        Sem `clienteId` ou `veiculo`, responde `ComandoRejeitado{DADOS_INVALIDOS}`.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: IniciarDiagnostico
+              dados:
+                $ref: '#/components/schemas/DadosIniciarDiagnostico'
+      examples:
+        - name: novaOrdemDeServico
+          headers:
+            tipo: IniciarDiagnostico
+            versao: '1'
+          payload:
+            mensagemId: 0d6f6f0e-8b0a-4d39-9a4e-9c8a5f3a1b11
+            tipo: IniciarDiagnostico
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: os-service
+            ocorridoEm: '2026-10-30T14:05:11.482Z'
+            dados:
+              clienteId: 5b0e3c1a-7d2f-4e6a-9c8b-1a2d3e4f5a6b
+              veiculo:
+                placa: BRA2E19
+                marca: Volkswagen
+                modelo: Gol
+                anoFabricacao: 2019
+              abertaEm: '2026-10-30T14:05:10.950Z'
+    ReabrirDiagnostico:
+      name: ReabrirDiagnostico
+      title: Reabrir diagnóstico
+      summary: Diagnóstico concluído sem itens na OS volta para `EM_DIAGNOSTICO`. Sem resposta.
+      description: |
+        Aplica `DIAGNOSTICO_CONCLUIDO → EM_DIAGNOSTICO` e registra um apontamento automático com o motivo.
+        Em `EM_DIAGNOSTICO` é ignorado (já reaberto); em outros status responde
+        `ComandoRejeitado{ESTADO_INVALIDO}`.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ReabrirDiagnostico
+              dados:
+                $ref: '#/components/schemas/DadosMotivo'
+      examples:
+        - name: diagnosticoSemItens
+          headers:
+            tipo: ReabrirDiagnostico
+            versao: '1'
+          payload:
+            mensagemId: 3a9d2f61-0c4b-4f7e-a1d2-6b5c4e3f2a19
+            tipo: ReabrirDiagnostico
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: os-service
+            ocorridoEm: '2026-10-30T15:06:02.117Z'
+            dados:
+              motivo: Diagnóstico concluído sem serviços ou peças na OS
+    IniciarReparo:
+      name: IniciarReparo
+      title: Iniciar reparo
+      summary: Coloca a OS na fila de reparo após o pagamento. Resposta esperada `ExecucaoEnfileirada{etapa=REPARO}`.
+      description: |
+        Aplica `DIAGNOSTICO_CONCLUIDO → AGUARDANDO_REPARO` e grava os itens de reparo. Se o reparo já foi
+        enfileirado (inclusive em `EM_REPARO`, `FINALIZADA` ou `FALHOU`), responde de novo com o instante
+        original. Antes do diagnóstico concluído, ou com a execução cancelada, responde
+        `ComandoRejeitado{ESTADO_INVALIDO}`.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: IniciarReparo
+              dados:
+                $ref: '#/components/schemas/DadosIniciarReparo'
+      examples:
+        - name: pagamentoAprovado
+          headers:
+            tipo: IniciarReparo
+            versao: '1'
+          payload:
+            mensagemId: 9e8d7c6b-5a49-4382-9170-6f5e4d3c2b1a
+            tipo: IniciarReparo
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: os-service
+            ocorridoEm: '2026-10-31T13:09:58.004Z'
+            dados:
+              itens:
+                - tipo: SERVICO
+                  descricao: Troca de pastilhas
+                  quantidade: 1
+                - tipo: PECA
+                  descricao: Pastilha de freio dianteira
+                  quantidade: 2
+    CancelarExecucao:
+      name: CancelarExecucao
+      title: Cancelar execução
+      summary: Compensação da saga. Resposta esperada `ExecucaoCancelada`.
+      description: |
+        Cancela qualquer status não terminal e encerra a etapa em andamento. Execução já cancelada responde
+        de novo `ExecucaoCancelada` com o motivo e o instante originais; `FINALIZADA` ou `FALHOU` responde
+        `ComandoRejeitado{ESTADO_INVALIDO}`; OS sem execução responde `ComandoRejeitado{EXECUCAO_INEXISTENTE}`.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: CancelarExecucao
+              dados:
+                $ref: '#/components/schemas/DadosMotivo'
+      examples:
+        - name: orcamentoReprovado
+          headers:
+            tipo: CancelarExecucao
+            versao: '1'
+          payload:
+            mensagemId: 4c3b2a19-0f8e-4d7c-b6a5-948372615f0e
+            tipo: CancelarExecucao
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: os-service
+            ocorridoEm: '2026-10-30T18:22:40.310Z'
+            dados:
+              motivo: Orçamento reprovado pelo cliente
+    ExecucaoEnfileirada:
+      name: ExecucaoEnfileirada
+      title: Execução enfileirada
+      summary: Resposta a `IniciarDiagnostico` e a `IniciarReparo`.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ExecucaoEnfileirada
+              dados:
+                $ref: '#/components/schemas/DadosExecucaoEnfileirada'
+      examples:
+        - name: filaDeDiagnostico
+          headers:
+            tipo: ExecucaoEnfileirada
+            versao: '1'
+          payload:
+            mensagemId: 2b1f0e9d-8c7b-4a69-b584-736251403f2e
+            tipo: ExecucaoEnfileirada
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: 0d6f6f0e-8b0a-4d39-9a4e-9c8a5f3a1b11
+            origem: execution-service
+            ocorridoEm: '2026-10-30T14:05:11.733Z'
+            dados:
+              etapa: DIAGNOSTICO
+              enfileiradaEm: '2026-10-30T14:05:11.733Z'
+    DiagnosticoIniciado:
+      name: DiagnosticoIniciado
+      title: Diagnóstico iniciado
+      summary: Mecânico iniciou o diagnóstico (`POST /api/execucoes/{osId}/diagnostico/inicio`).
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: DiagnosticoIniciado
+              dados:
+                $ref: '#/components/schemas/DadosInicioMecanico'
+      examples:
+        - name: mecanicoIniciou
+          headers:
+            tipo: DiagnosticoIniciado
+            versao: '1'
+          payload:
+            mensagemId: 6d5c4b3a-2918-4f7e-8d6c-5b4a39281706
+            tipo: DiagnosticoIniciado
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: execution-service
+            ocorridoEm: '2026-10-30T14:20:00.000Z'
+            dados:
+              mecanicoId: 6f1c4d2e-9a0b-4c3d-8e7f-1a2b3c4d5e6f
+              iniciadoEm: '2026-10-30T14:20:00.000Z'
+    DiagnosticoConcluido:
+      name: DiagnosticoConcluido
+      title: Diagnóstico concluído
+      summary: Mecânico concluiu o diagnóstico com observações.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: DiagnosticoConcluido
+              dados:
+                $ref: '#/components/schemas/DadosDiagnosticoConcluido'
+      examples:
+        - name: diagnosticoComObservacoes
+          headers:
+            tipo: DiagnosticoConcluido
+            versao: '1'
+          payload:
+            mensagemId: 7e6d5c4b-3a29-4180-9f7e-6d5c4b3a2918
+            tipo: DiagnosticoConcluido
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: execution-service
+            ocorridoEm: '2026-10-30T15:05:00.000Z'
+            dados:
+              mecanicoId: 6f1c4d2e-9a0b-4c3d-8e7f-1a2b3c4d5e6f
+              concluidoEm: '2026-10-30T15:05:00.000Z'
+              observacoes: Pastilhas dianteiras no limite de desgaste
+    ReparoIniciado:
+      name: ReparoIniciado
+      title: Reparo iniciado
+      summary: Mecânico iniciou o reparo (`POST /api/execucoes/{osId}/reparo/inicio`).
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ReparoIniciado
+              dados:
+                $ref: '#/components/schemas/DadosInicioMecanico'
+      examples:
+        - name: mecanicoIniciouReparo
+          headers:
+            tipo: ReparoIniciado
+            versao: '1'
+          payload:
+            mensagemId: 8f7e6d5c-4b3a-4291-8a7f-6e5d4c3b2a19
+            tipo: ReparoIniciado
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: execution-service
+            ocorridoEm: '2026-10-31T13:30:00.000Z'
+            dados:
+              mecanicoId: 6f1c4d2e-9a0b-4c3d-8e7f-1a2b3c4d5e6f
+              iniciadoEm: '2026-10-31T13:30:00.000Z'
+    ExecucaoFinalizada:
+      name: ExecucaoFinalizada
+      title: Execução finalizada
+      summary: Mecânico concluiu o reparo; o OS Service finaliza a OS e conclui a saga.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ExecucaoFinalizada
+              dados:
+                $ref: '#/components/schemas/DadosExecucaoFinalizada'
+      examples:
+        - name: reparoConcluido
+          headers:
+            tipo: ExecucaoFinalizada
+            versao: '1'
+          payload:
+            mensagemId: 9a8f7e6d-5c4b-43a2-9b1f-0e9d8c7b6a5f
+            tipo: ExecucaoFinalizada
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: execution-service
+            ocorridoEm: '2026-10-31T15:12:30.000Z'
+            dados:
+              mecanicoId: 6f1c4d2e-9a0b-4c3d-8e7f-1a2b3c4d5e6f
+              finalizadaEm: '2026-10-31T15:12:30.000Z'
+    ExecucaoFalhou:
+      name: ExecucaoFalhou
+      title: Execução falhou
+      summary: Mecânico registrou falha na etapa de reparo; o OS Service inicia a compensação `FALHA_EXECUCAO`.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ExecucaoFalhou
+              dados:
+                $ref: '#/components/schemas/DadosExecucaoFalhou'
+      examples:
+        - name: pecaComDefeito
+          headers:
+            tipo: ExecucaoFalhou
+            versao: '1'
+          payload:
+            mensagemId: 0b9a8f7e-6d5c-44b3-8a2f-1e0d9c8b7a6f
+            tipo: ExecucaoFalhou
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: null
+            origem: execution-service
+            ocorridoEm: '2026-10-31T14:02:11.000Z'
+            dados:
+              mecanicoId: 6f1c4d2e-9a0b-4c3d-8e7f-1a2b3c4d5e6f
+              motivo: Peça entregue com defeito de fabricação
+              ocorridaEm: '2026-10-31T14:02:11.000Z'
+    ExecucaoCancelada:
+      name: ExecucaoCancelada
+      title: Execução cancelada
+      summary: Resposta a `CancelarExecucao`, repetida com os dados originais se a execução já estava cancelada.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ExecucaoCancelada
+              dados:
+                $ref: '#/components/schemas/DadosExecucaoCancelada'
+      examples:
+        - name: canceladaPorReprovacao
+          headers:
+            tipo: ExecucaoCancelada
+            versao: '1'
+          payload:
+            mensagemId: 1c0b9a8f-7e6d-45c4-9b3a-2f1e0d9c8b7a
+            tipo: ExecucaoCancelada
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: 4c3b2a19-0f8e-4d7c-b6a5-948372615f0e
+            origem: execution-service
+            ocorridoEm: '2026-10-30T18:22:40.871Z'
+            dados:
+              motivo: Orçamento reprovado pelo cliente
+              canceladaEm: '2026-10-30T18:22:40.871Z'
+    ComandoRejeitado:
+      name: ComandoRejeitado
+      title: Comando rejeitado
+      summary: Comando inválido para o estado da execução; a mensagem é reconhecida, sem nova tentativa.
+      traits:
+        - $ref: '#/components/messageTraits/atributosSqs'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              tipo:
+                const: ComandoRejeitado
+              dados:
+                $ref: '#/components/schemas/DadosComandoRejeitado'
+      examples:
+        - name: cancelamentoAposFinalizacao
+          headers:
+            tipo: ComandoRejeitado
+            versao: '1'
+          payload:
+            mensagemId: 2d1c0b9a-8f7e-46d5-8c4b-3a2f1e0d9c8b
+            tipo: ComandoRejeitado
+            versao: 1
+            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
+            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
+            causadaPor: 5d4c3b2a-1908-4e7d-a6c5-b4a392817065
+            origem: execution-service
+            ocorridoEm: '2026-10-31T15:20:03.402Z'
+            dados:
+              comando: CancelarExecucao
+              motivo: Execução encerrada com status FINALIZADA não pode ser cancelada.
+              codigo: ESTADO_INVALIDO
