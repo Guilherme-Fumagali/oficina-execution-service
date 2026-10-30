@@ -22,7 +22,6 @@ Serviço de execução do sistema de gestão de oficina mecânica, desenvolvido 
 |---|---|
 | Contrato OpenAPI | [`docs/openapi.json`](docs/openapi.json), visualizável no [Redoc](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/Guilherme-Fumagali/oficina-execution-service/develop/docs/openapi.json) |
 | Contrato AsyncAPI 2.6 | [`docs/asyncapi.yaml`](docs/asyncapi.yaml), visualizável no [AsyncAPI Studio](https://studio.asyncapi.com/?url=https://raw.githubusercontent.com/Guilherme-Fumagali/oficina-execution-service/develop/docs/asyncapi.yaml) |
-| Coleção Postman | [`docs/postman/execution.postman_collection.json`](docs/postman/execution.postman_collection.json) |
 | Swagger UI | `http://localhost:8082/swagger-ui.html` na execução local |
 | Decisões de arquitetura da fase | [ADR-016 a ADR-025](https://github.com/Guilherme-Fumagali/tech-challenge-1/blob/develop/docs/tech-challenge-4/adrs/README.md), em `docs/tech-challenge-4` do repositório tech-challenge-1 |
 | Vídeo de demonstração | a publicar |
@@ -303,7 +302,7 @@ O mecânico é o `sub` do JWT de funcionário. Os erros seguem o formato Problem
 
 ## Autenticação e papéis
 
-O serviço não emite tokens. O JWT é emitido pelo Lambda do repositório `oficina-auth-lambda` (login por CPF com segundo fator) e validado duas vezes: pelo authorizer no API Gateway e pelo `JwtService` no serviço. São aceitos apenas tokens com emissor `oficina-auth`, assinatura válida, dentro da validade, papel `CLIENTE` ou `FUNCIONARIO` e `sub` em formato UUID. Para testes locais, a coleção Postman assina tokens de teste com a mesma `JWT_SECRET`, como fazem os testes de integração.
+O serviço não emite tokens. O JWT é emitido pelo Lambda do repositório `oficina-auth-lambda` (login por CPF com segundo fator) e validado duas vezes: pelo authorizer no API Gateway e pelo `JwtService` no serviço. São aceitos apenas tokens com emissor `oficina-auth`, assinatura válida, dentro da validade, papel `CLIENTE` ou `FUNCIONARIO` e `sub` em formato UUID. Os testes de integração assinam tokens de teste com a mesma `JWT_SECRET`.
 
 ## Observabilidade
 
@@ -400,7 +399,7 @@ O build falha abaixo dos mínimos. Ficam fora da medição apenas a classe `Exec
 ```
 ├── src/main/java/com/oficina/execution/   domain, application e infrastructure
 ├── src/test/                              testes unitários e de integração
-├── docs/                                  openapi.json, asyncapi.yaml e coleção Postman
+├── docs/                                  openapi.json e asyncapi.yaml
 ├── k8s/                                   base e overlays do Kustomize
 ├── infra/                                 Terraform do DocumentDB, das filas e da identidade do pod
 ├── localstack/init/ready.d/               criação das filas no LocalStack
