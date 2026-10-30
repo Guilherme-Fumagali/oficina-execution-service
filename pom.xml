@@ -164,6 +164,7 @@
                 <configuration>
                     <verbose>false</verbose>
                     <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
                     <offline>true</offline>
                     <includeOnlyProperties>
                         <includeOnlyProperty>^git.branch$</includeOnlyProperty>
