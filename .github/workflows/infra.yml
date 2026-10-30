@@ -3,10 +3,6 @@ name: Infra
 on:
   push:
     branches: ['**']
-    paths:
-      - 'infra/**'
-      - '.github/workflows/infra.yml'
-  pull_request:
   workflow_dispatch:
     inputs:
       acao:
