@@ -1,0 +1,10 @@
+target/
+.idea/
+.vscode/
+*.md
+docs/
+.github/
+k8s/
+infra/
+localstack/
+.env
