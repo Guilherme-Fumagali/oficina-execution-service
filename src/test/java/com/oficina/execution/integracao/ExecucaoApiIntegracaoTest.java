@@ -7,7 +7,6 @@ import com.oficina.execution.domain.entity.Execucao;
 import com.oficina.execution.domain.repository.ExecucaoRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,7 +42,6 @@ class ExecucaoApiIntegracaoTest extends IntegracaoBase {
 
     @Autowired MockMvc mvc;
     @Autowired ExecucaoRepository repository;
-    @Autowired MeterRegistry registry;
 
     @Test
     void fluxoCompletoDoDiagnosticoAoReparoPublicaOsEventosDaSaga() throws Exception {
@@ -51,7 +49,6 @@ class ExecucaoApiIntegracaoTest extends IntegracaoBase {
         var sagaId = UUID.randomUUID();
         var mecanico = UUID.randomUUID();
         var token = token(mecanico, "FUNCIONARIO");
-        var duracoesAntes = duracoes("REPARO");
 
         enviarComando("IniciarDiagnostico", osId, sagaId, dadosIniciarDiagnostico(UUID.randomUUID()));
         aguardarEvento(osId, "ExecucaoEnfileirada");
@@ -100,13 +97,11 @@ class ExecucaoApiIntegracaoTest extends IntegracaoBase {
         assertThat(eventos(osId)).allSatisfy(e -> assertThat(e.envelope().get("sagaId").asText())
             .isEqualTo(sagaId.toString()));
         assertThat(eventos(osId, "ExecucaoEnfileirada").getLast().dados().get("etapa").asText()).isEqualTo("REPARO");
-        assertThat(duracoes("REPARO")).isGreaterThan(duracoesAntes);
     }
 
     @Test
     void falhaNoReparoPublicaExecucaoFalhou() throws Exception {
         var execucao = salvarEmFilaDeReparo();
-        var falhasAntes = contador("oficina.execucao.falhas");
 
         mvc.perform(post("/api/execucoes/{osId}/falha", execucao.getOsId()).header("Authorization", "Bearer " + funcionario())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motivo\":\"Peça entregue com defeito\"}"))
@@ -116,7 +111,6 @@ class ExecucaoApiIntegracaoTest extends IntegracaoBase {
 
         var falhou = aguardarEvento(execucao.getOsId(), "ExecucaoFalhou");
         assertThat(falhou.dados().get("motivo").asText()).isEqualTo("Peça entregue com defeito");
-        assertThat(contador("oficina.execucao.falhas")).isEqualTo(falhasAntes + 1);
     }
 
     @Test
@@ -321,16 +315,6 @@ class ExecucaoApiIntegracaoTest extends IntegracaoBase {
         var ids = new ArrayList<String>();
         JSON.readTree(json).forEach(no -> ids.add(no.get("osId").asText()));
         return ids;
-    }
-
-    private double contador(String nome) {
-        var contador = registry.find(nome).counter();
-        return contador == null ? 0 : contador.count();
-    }
-
-    private long duracoes(String etapa) {
-        var timer = registry.find("oficina.execucao.duracao").tag("etapa", etapa).timer();
-        return timer == null ? 0 : timer.count();
     }
 
     private String funcionario() {

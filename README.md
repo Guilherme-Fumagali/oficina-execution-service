@@ -309,15 +309,12 @@ O serviço não emite tokens. O JWT é emitido pelo Lambda do repositório `ofic
 
 | Métrica | Tipo | Atributos |
 |---|---|---|
-| `oficina.execucao.transicoes` | counter | `de`, `para` (`de=NENHUM` na criação) |
-| `oficina.execucao.duracao` | timer | `etapa` (do início à conclusão do diagnóstico ou do reparo) |
 | `oficina.execucao.fila.tamanho` | gauge | `etapa` (execuções em `AGUARDANDO_DIAGNOSTICO` e `AGUARDANDO_REPARO`, a cada 30 s) |
-| `oficina.execucao.falhas` | counter | — |
 | `oficina.mensageria.publicadas` | counter | `tipo` |
 | `oficina.mensageria.consumidas` | counter | `tipo`, `resultado` (`aplicada`, `ignorada`, `duplicada`, `rejeitada`, `erro`) |
 | `oficina.mensageria.dlq.mensagens` | gauge | `fila` (`ApproximateNumberOfMessages` da DLQ, a cada 60 s) |
 
-As métricas de transição são registradas somente depois da confirmação da transação. No perfil `k8s`, os logs saem em JSON no formato ECS, com os identificadores de trace e span e as chaves de MDC `os.id`, `saga.id`, `mensagem.id` e `usuario.id`. O agente do New Relic encaminha os logs e escreve o próprio log na saída padrão, já que o sistema de arquivos do contêiner é somente leitura.
+No perfil `k8s`, os logs saem em JSON no formato ECS, com os identificadores de trace e span e as chaves de MDC `os.id`, `saga.id`, `mensagem.id` e `usuario.id`. O agente do New Relic encaminha os logs e escreve o próprio log na saída padrão, já que o sistema de arquivos do contêiner é somente leitura.
 
 ## Implantação
 
@@ -376,9 +373,9 @@ Os testes rodam em todo push e em todo pull request. O deploy só acontece depoi
 |---|---|---|---|---|
 | Domínio | 2 | 38 | 162 | unitário, Java puro: tabela completa de transições (64 pares) e todas as operações do agregado, válidas e inválidas |
 | Aplicação | 3 | 45 | 60 | unitário com Mockito: casos de uso do mecânico, comandos com idempotência e rejeições, inbox |
-| Infraestrutura | 10 | 42 | 47 | unitário: leitura de envelopes, relay e falha de envio, duplicata por chave, cabeçalhos do New Relic, métricas e gauges, JWT, tratamento de erros, visão reduzida do cliente |
+| Infraestrutura | 9 | 39 | 44 | unitário: leitura de envelopes, relay e falha de envio, duplicata por chave, cabeçalhos do New Relic, métricas e gauges, JWT, tratamento de erros, visão reduzida do cliente |
 | Integração | 3 | 26 | 26 | Spring completo com Testcontainers `mongo:6.0.14` (replica set, transações) e `localstack/localstack:3` |
-| **Total** | **18** | **151** | **295** | |
+| **Total** | **17** | **148** | **292** | |
 
 Os testes de integração cobrem: comando na fila → documento criado → `ExecucaoEnfileirada` publicado em `os-eventos` com o envelope e os atributos esperados; duplicata exata descartada; reenvio com `mensagemId` novo respondido de novo; `ComandoRejeitado` para comando inválido, desconhecido ou com dados inválidos; cancelamento idempotente; mensagem malformada encaminhada à DLQ e medida pelo gauge; falha de envio mantida no outbox com tentativa registrada; lock otimista em duas atualizações concorrentes; ordenação da fila por prioridade e entrada; coleções e índices criados na subida (inclusive o TTL); rollback da unidade de trabalho com a `readPreference` do DocumentDB; fluxo completo pela API com os seis eventos na ordem da saga; papéis, visão reduzida do cliente e respostas de erro; e o snapshot do contrato OpenAPI.
 
@@ -386,9 +383,9 @@ Cobertura medida pelo JaCoCo no `./mvnw verify`:
 
 | Contador | Cobertura | Mínimo exigido |
 |---|---|---|
-| Linhas | 99,43% (1049 de 1055) | 80% |
-| Ramos | 95,32% (224 de 235) | 70% |
-| Instruções | 99,05% | — |
+| Linhas | 99,41% (1012 de 1018) | 80% |
+| Ramos | 95,15% (216 de 227) | 70% |
+| Instruções | 99,00% | — |
 
 O build falha abaixo dos mínimos. Ficam fora da medição apenas a classe `ExecutionServiceApplication` e as classes de configuração sem lógica do pacote `infrastructure/config` (`UseCaseConfig`, `MongoConfig`, `MensageriaConfig`, `OpenApiConfig`, `RelogioConfig`), listadas no `pom.xml`. O relatório HTML é publicado como artefato `jacoco-report` em cada execução do pipeline, e a cobertura também aparece no SonarCloud (badge no topo).
 

@@ -1,6 +1,5 @@
 package com.oficina.execution.infrastructure.persistence;
 
-import com.oficina.execution.application.port.MetricasExecucao;
 import com.oficina.execution.domain.entity.Execucao;
 import com.oficina.execution.domain.repository.ExecucaoRepository;
 import com.oficina.execution.domain.valueobject.StatusExecucao;
@@ -11,8 +10,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,19 +19,15 @@ import java.util.UUID;
 public class ExecucaoRepositoryMongo implements ExecucaoRepository {
 
     private final MongoTemplate mongo;
-    private final MetricasExecucao metricas;
 
-    public ExecucaoRepositoryMongo(MongoTemplate mongo, MetricasExecucao metricas) {
+    public ExecucaoRepositoryMongo(MongoTemplate mongo) {
         this.mongo = mongo;
-        this.metricas = metricas;
     }
 
     @Override
     public Execucao salvar(Execucao execucao) {
         var salvo = mongo.save(ExecucaoDocumentMapper.paraDocumento(execucao));
         execucao.sincronizarVersao(salvo.getVersao());
-        var transicoes = execucao.drenarTransicoes();
-        aposConfirmacao(() -> transicoes.forEach(metricas::registrarTransicao));
         return execucao;
     }
 
@@ -62,18 +55,5 @@ public class ExecucaoRepositoryMongo implements ExecucaoRepository {
     @Override
     public long contarPorStatus(StatusExecucao status) {
         return mongo.count(Query.query(Criteria.where("status").is(status)), ExecucaoDocument.class);
-    }
-
-    private static void aposConfirmacao(Runnable acao) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            acao.run();
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                acao.run();
-            }
-        });
     }
 }

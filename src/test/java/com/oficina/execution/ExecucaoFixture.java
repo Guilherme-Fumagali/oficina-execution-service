@@ -34,7 +34,6 @@ public final class ExecucaoFixture {
     public static Execucao em(StatusExecucao status) {
         var execucao = nova();
         avancar(execucao, status);
-        execucao.drenarTransicoes();
         return execucao;
     }
 

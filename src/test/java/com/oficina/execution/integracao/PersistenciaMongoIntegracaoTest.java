@@ -8,7 +8,6 @@ import com.oficina.execution.domain.valueobject.StatusExecucao;
 import com.oficina.execution.domain.valueobject.TipoEtapa;
 import com.oficina.execution.infrastructure.persistence.ColecoesMongo;
 import com.oficina.execution.infrastructure.persistence.InicializadorMongo;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +34,6 @@ class PersistenciaMongoIntegracaoTest extends IntegracaoBase {
     @Autowired UnidadeDeTrabalho unidadeDeTrabalho;
     @Autowired RegistroMensagensProcessadas mensagensProcessadas;
     @Autowired InicializadorMongo inicializador;
-    @Autowired MeterRegistry registry;
 
     private Execucao nova(Instant enfileiradaEm) {
         return Execucao.enfileirarDiagnostico(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), veiculo(), enfileiradaEm);
@@ -141,7 +139,6 @@ class PersistenciaMongoIntegracaoTest extends IntegracaoBase {
     void unidadeDeTrabalhoDesfazTudoQuandoFalha() {
         var execucao = nova(Instant.parse("2026-10-30T11:00:00Z"));
         var mensagemId = UUID.randomUUID();
-        var transicoesAntes = contadorDeEntradaNaFila();
 
         assertThatThrownBy(() -> unidadeDeTrabalho.executar(() -> {
             assertThat(mensagensProcessadas.jaProcessada(mensagemId)).isFalse();
@@ -153,14 +150,12 @@ class PersistenciaMongoIntegracaoTest extends IntegracaoBase {
 
         assertThat(repository.buscarPorId(execucao.getOsId())).isEmpty();
         assertThat(mensagensProcessadas.jaProcessada(mensagemId)).isFalse();
-        assertThat(contadorDeEntradaNaFila()).isEqualTo(transicoesAntes);
     }
 
     @Test
-    void unidadeDeTrabalhoConfirmaGravacoesEMetricas() {
+    void unidadeDeTrabalhoConfirmaGravacoes() {
         var execucao = nova(Instant.parse("2026-10-30T12:00:00Z"));
         var mensagemId = UUID.randomUUID();
-        var transicoesAntes = contadorDeEntradaNaFila();
 
         unidadeDeTrabalho.executar(() -> {
             assertThat(repository.buscarPorId(execucao.getOsId())).isEmpty();
@@ -171,14 +166,8 @@ class PersistenciaMongoIntegracaoTest extends IntegracaoBase {
 
         assertThat(repository.buscarPorId(execucao.getOsId())).isPresent();
         assertThat(mensagensProcessadas.jaProcessada(mensagemId)).isTrue();
-        assertThat(contadorDeEntradaNaFila()).isEqualTo(transicoesAntes + 1);
     }
 
-    private double contadorDeEntradaNaFila() {
-        var contador = registry.find("oficina.execucao.transicoes")
-            .tags("de", "NENHUM", "para", "AGUARDANDO_DIAGNOSTICO").counter();
-        return contador == null ? 0 : contador.count();
-    }
 
     private IndexInfo indice(String colecao, String nome) {
         Map<String, IndexInfo> porNome = mongo.indexOps(colecao).getIndexInfo().stream()

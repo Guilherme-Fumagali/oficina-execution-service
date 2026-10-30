@@ -6,7 +6,6 @@ import com.oficina.execution.domain.exception.TransicaoInvalidaException;
 import com.oficina.execution.domain.valueobject.StatusExecucao;
 import com.oficina.execution.domain.valueobject.TipoEtapa;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,8 +43,6 @@ public class Execucao {
     private String motivoCancelamento;
     private Long versao;
 
-    private final List<TransicaoExecucao> transicoesPendentes = new ArrayList<>();
-
     private Execucao(DadosExecucao dados) {
         this.osId = dados.osId();
         this.sagaId = dados.sagaId();
@@ -73,7 +70,6 @@ public class Execucao {
             osId, sagaId, clienteId, veiculo, AGUARDANDO_DIAGNOSTICO, DIAGNOSTICO, 0, agora,
             List.of(), List.of(), List.of(), List.of(), null, null, null, null));
         execucao.historicoStatus.add(new HistoricoStatus(null, AGUARDANDO_DIAGNOSTICO, agora, null));
-        execucao.transicoesPendentes.add(new TransicaoExecucao(osId, null, AGUARDANDO_DIAGNOSTICO, DIAGNOSTICO, null));
         return execucao;
     }
 
@@ -84,13 +80,13 @@ public class Execucao {
     public void iniciarDiagnostico(UUID mecanicoId, Instant agora) {
         exigirOrigem(AGUARDANDO_DIAGNOSTICO, EM_DIAGNOSTICO);
         exigirMecanico(mecanicoId);
-        transicionar(EM_DIAGNOSTICO, etapaAtual, agora, null, null);
+        transicionar(EM_DIAGNOSTICO, etapaAtual, agora, null);
         etapas.add(new Etapa(DIAGNOSTICO, mecanicoId, agora, null));
     }
 
     public void concluirDiagnostico(String observacoes, Instant agora) {
         exigir(temTexto(observacoes), "As observações do diagnóstico são obrigatórias.");
-        transicionar(DIAGNOSTICO_CONCLUIDO, etapaAtual, agora, null, duracaoDaEtapaEmAndamento(agora));
+        transicionar(DIAGNOSTICO_CONCLUIDO, etapaAtual, agora, null);
         encerrarEtapaEmAndamento(agora);
         this.observacoesDiagnostico = observacoes;
     }
@@ -98,7 +94,7 @@ public class Execucao {
     public void reabrirDiagnostico(String motivo, Instant agora) {
         exigirOrigem(DIAGNOSTICO_CONCLUIDO, EM_DIAGNOSTICO);
         var mecanicoId = ultimaEtapa(DIAGNOSTICO).map(Etapa::mecanicoId).orElse(null);
-        transicionar(EM_DIAGNOSTICO, etapaAtual, agora, motivo, null);
+        transicionar(EM_DIAGNOSTICO, etapaAtual, agora, motivo);
         etapas.add(new Etapa(DIAGNOSTICO, mecanicoId, agora, null));
         var texto = temTexto(motivo) ? "Diagnóstico reaberto: " + motivo : "Diagnóstico reaberto.";
         apontamentos.add(new Apontamento(null, texto, agora));
@@ -106,31 +102,31 @@ public class Execucao {
 
     public void enfileirarReparo(List<ItemReparo> itens, Instant agora) {
         exigir(itens != null && !itens.isEmpty(), "O reparo exige ao menos um item.");
-        transicionar(AGUARDANDO_REPARO, REPARO, agora, null, null);
+        transicionar(AGUARDANDO_REPARO, REPARO, agora, null);
         this.enfileiradaEm = agora;
         this.itensReparo = new ArrayList<>(itens);
     }
 
     public void iniciarReparo(UUID mecanicoId, Instant agora) {
         exigirMecanico(mecanicoId);
-        transicionar(EM_REPARO, etapaAtual, agora, null, null);
+        transicionar(EM_REPARO, etapaAtual, agora, null);
         etapas.add(new Etapa(REPARO, mecanicoId, agora, null));
     }
 
     public void concluirReparo(Instant agora) {
-        transicionar(FINALIZADA, etapaAtual, agora, null, duracaoDaEtapaEmAndamento(agora));
+        transicionar(FINALIZADA, etapaAtual, agora, null);
         encerrarEtapaEmAndamento(agora);
     }
 
     public void registrarFalha(String motivo, Instant agora) {
         exigir(temTexto(motivo), "O motivo da falha é obrigatório.");
-        transicionar(FALHOU, etapaAtual, agora, motivo, null);
+        transicionar(FALHOU, etapaAtual, agora, motivo);
         encerrarEtapaEmAndamento(agora);
         this.motivoFalha = motivo;
     }
 
     public void cancelar(String motivo, Instant agora) {
-        transicionar(CANCELADA, etapaAtual, agora, motivo, null);
+        transicionar(CANCELADA, etapaAtual, agora, motivo);
         encerrarEtapaEmAndamento(agora);
         this.motivoCancelamento = motivo;
     }
@@ -166,28 +162,16 @@ public class Execucao {
         return status.isTerminal();
     }
 
-    public List<TransicaoExecucao> drenarTransicoes() {
-        var copia = List.copyOf(transicoesPendentes);
-        transicoesPendentes.clear();
-        return copia;
-    }
-
     public void sincronizarVersao(Long versaoPersistida) {
         this.versao = versaoPersistida;
     }
 
-    private void transicionar(StatusExecucao destino, TipoEtapa etapaDestino, Instant agora,
-                              String motivo, Duration duracaoEtapa) {
+    private void transicionar(StatusExecucao destino, TipoEtapa etapaDestino, Instant agora, String motivo) {
         status.validarTransicaoPara(destino);
         var origem = status;
         this.status = destino;
         this.etapaAtual = etapaDestino;
         historicoStatus.add(new HistoricoStatus(origem, destino, agora, motivo));
-        transicoesPendentes.add(new TransicaoExecucao(osId, origem, destino, etapaDestino, duracaoEtapa));
-    }
-
-    private Duration duracaoDaEtapaEmAndamento(Instant agora) {
-        return etapaEmAndamento().map(e -> Duration.between(e.inicio(), agora)).orElse(null);
     }
 
     private void encerrarEtapaEmAndamento(Instant agora) {
@@ -197,10 +181,6 @@ public class Execucao {
                 return;
             }
         }
-    }
-
-    private Optional<Etapa> etapaEmAndamento() {
-        return etapas.reversed().stream().filter(Etapa::emAndamento).findFirst();
     }
 
     private void exigirOrigem(StatusExecucao esperado, StatusExecucao destino) {

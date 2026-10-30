@@ -6,7 +6,6 @@ import com.oficina.execution.domain.entity.Etapa;
 import com.oficina.execution.domain.entity.Execucao;
 import com.oficina.execution.domain.entity.HistoricoStatus;
 import com.oficina.execution.domain.entity.ItemReparo;
-import com.oficina.execution.domain.entity.TransicaoExecucao;
 import com.oficina.execution.domain.entity.Veiculo;
 import com.oficina.execution.domain.exception.DomainException;
 import com.oficina.execution.domain.exception.OperacaoNaoPermitidaException;
@@ -19,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -62,9 +60,6 @@ class ExecucaoTest {
             assertThat(execucao.getItensReparo()).isEmpty();
             assertThat(execucao.getHistoricoStatus())
                 .containsExactly(new HistoricoStatus(null, AGUARDANDO_DIAGNOSTICO, T0, null));
-            assertThat(execucao.drenarTransicoes())
-                .containsExactly(new TransicaoExecucao(osId, null, AGUARDANDO_DIAGNOSTICO, TipoEtapa.DIAGNOSTICO, null));
-            assertThat(execucao.drenarTransicoes()).isEmpty();
         }
 
         @Test
@@ -93,8 +88,6 @@ class ExecucaoTest {
             assertThat(execucao.getEtapas()).containsExactly(new Etapa(TipoEtapa.DIAGNOSTICO, MECANICO, T1, null));
             assertThat(execucao.getHistoricoStatus()).last()
                 .isEqualTo(new HistoricoStatus(AGUARDANDO_DIAGNOSTICO, EM_DIAGNOSTICO, T1, null));
-            assertThat(execucao.drenarTransicoes()).singleElement()
-                .satisfies(t -> assertThat(t.duracaoEtapa()).isNull());
         }
 
         @Test
@@ -115,9 +108,8 @@ class ExecucaoTest {
         }
 
         @Test
-        void conclusaoEncerraEtapaERegistraDuracao() {
+        void conclusaoEncerraEtapaERegistraHistorico() {
             var execucao = em(EM_DIAGNOSTICO);
-            var inicio = execucao.getEtapas().getFirst().inicio();
 
             execucao.concluirDiagnostico("Pastilhas gastas", T1);
 
@@ -125,9 +117,8 @@ class ExecucaoTest {
             assertThat(execucao.getObservacoesDiagnostico()).isEqualTo("Pastilhas gastas");
             assertThat(execucao.getEtapas()).singleElement()
                 .satisfies(e -> assertThat(e.fim()).isEqualTo(T1));
-            assertThat(execucao.drenarTransicoes()).singleElement()
-                .isEqualTo(new TransicaoExecucao(execucao.getOsId(), EM_DIAGNOSTICO, DIAGNOSTICO_CONCLUIDO,
-                    TipoEtapa.DIAGNOSTICO, Duration.between(inicio, T1)));
+            assertThat(execucao.getHistoricoStatus()).last()
+                .isEqualTo(new HistoricoStatus(EM_DIAGNOSTICO, DIAGNOSTICO_CONCLUIDO, T1, null));
         }
 
         @Test
@@ -207,8 +198,6 @@ class ExecucaoTest {
             assertThat(execucao.getItensReparo()).containsExactlyElementsOf(itens());
             assertThat(execucao.enfileiramentoDa(TipoEtapa.REPARO)).contains(T1);
             assertThat(execucao.enfileiramentoDa(TipoEtapa.DIAGNOSTICO)).contains(T0);
-            assertThat(execucao.drenarTransicoes()).singleElement()
-                .satisfies(t -> assertThat(t.etapa()).isEqualTo(TipoEtapa.REPARO));
         }
 
         @Test
@@ -242,10 +231,8 @@ class ExecucaoTest {
             assertThat(execucao.isTerminal()).isTrue();
             assertThat(execucao.ultimaEtapa(TipoEtapa.REPARO))
                 .contains(new Etapa(TipoEtapa.REPARO, MECANICO, inicio, fim));
-            assertThat(execucao.drenarTransicoes()).extracting(TransicaoExecucao::para, TransicaoExecucao::duracaoEtapa)
-                .containsExactly(
-                    org.assertj.core.groups.Tuple.tuple(EM_REPARO, null),
-                    org.assertj.core.groups.Tuple.tuple(FINALIZADA, Duration.ofMinutes(30)));
+            assertThat(execucao.getHistoricoStatus()).last()
+                .isEqualTo(new HistoricoStatus(EM_REPARO, FINALIZADA, fim, null));
         }
 
         @Test
@@ -402,7 +389,6 @@ class ExecucaoTest {
             assertThat(execucao.getPrioridade()).isEqualTo(2);
             assertThat(execucao.getHistoricoStatus()).isEmpty();
             assertThat(execucao.instanteDoStatus(AGUARDANDO_DIAGNOSTICO)).isEmpty();
-            assertThat(execucao.drenarTransicoes()).isEmpty();
 
             execucao.sincronizarVersao(8L);
             assertThat(execucao.getVersao()).isEqualTo(8L);
