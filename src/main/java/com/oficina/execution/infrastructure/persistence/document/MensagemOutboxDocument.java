@@ -14,6 +14,7 @@ public record MensagemOutboxDocument(
     String tipo,
     int versao,
     String osId,
+    String sagaId,
     String payload,
     Map<String, String> cabecalhos,
     StatusPublicacao status,
