@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: execution-service
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/execucao?directConnection=true}
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+      sqs:
+        queue-not-found-strategy: fail
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  task:
+    scheduling:
+      pool:
+        size: 3
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+jwt:
+  secret: ${JWT_SECRET}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  mensageria:
+    filas:
+      entrada: ${app.mensageria.filas.execution-comandos}
+      execution-comandos: ${FILA_EXECUTION_COMANDOS:oficina-local-execution-comandos}
+      os-eventos: ${FILA_OS_EVENTOS:oficina-local-os-eventos}
+    dlq: ${FILA_DLQ:${app.mensageria.filas.execution-comandos}-dlq}
+    dlq-intervalo: ${DLQ_INTERVALO:60000}
+    relay:
+      intervalo: ${RELAY_INTERVALO:500}
+      lote: 50
+      reserva: 30s
+  metricas:
+    fila-intervalo: ${FILA_METRICA_INTERVALO:30000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  info:
+    git:
+      mode: simple
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    metrics:
+      export:
+        url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+        step: ${METRICS_EXPORT_STEP:60s}
+        headers:
+          api-key: ${NEW_RELIC_LICENSE_KEY:}
+        resource-attributes:
+          service.name: ${spring.application.name}
+          service.environment: ${ENV:local}
+          env: ${ENV:local}
+
+logging:
+  level:
+    root: INFO
+    com.oficina: INFO
+    org.springframework.security: WARN
