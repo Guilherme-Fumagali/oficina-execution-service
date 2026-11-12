@@ -3,10 +3,10 @@ framework:
 compact: true
 quiet: true
 skip-check:
-  - CKV_AWS_85
-  - CKV_AWS_104
-  - CKV_AWS_182
-  - CKV_AWS_360
-  - CKV2_AWS_73
-  - CKV_AWS_337
-  - CKV2_AWS_34
+  - CKV_AWS_85   # exportar logs do DocumentDB ao CloudWatch; custo extra
+  - CKV_AWS_104  # auditoria do DocumentDB; custo extra no CloudWatch
+  - CKV_AWS_182  # DocumentDB com chave KMS própria; usa a chave da AWS
+  - CKV_AWS_360  # backup retido por 7 dias ou mais; retém 1 dia
+  - CKV2_AWS_73  # fila SQS com chave KMS própria; usa SSE-SQS
+  - CKV_AWS_337  # parâmetro SSM com chave KMS própria; usa a chave da AWS
+  - CKV2_AWS_34  # todo parâmetro SSM como SecureString; só a senha é segredo
