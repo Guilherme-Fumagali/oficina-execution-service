@@ -1,0 +1,28 @@
+spring:
+  cloud:
+    aws:
+      credentials:
+        access-key: test
+        secret-key: test
+      sqs:
+        listener:
+          poll-timeout: 1s
+
+jwt:
+  secret: chave-de-teste-super-longa-para-hmac-sha-256-minimo-32-chars
+
+app:
+  mensageria:
+    dlq-intervalo: 600000
+    relay:
+      intervalo: 200
+  metricas:
+    fila-intervalo: 600000
+
+management:
+  tracing:
+    enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
