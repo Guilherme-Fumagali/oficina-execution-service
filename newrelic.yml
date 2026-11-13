@@ -1,0 +1,37 @@
+common: &default_settings
+  license_key: ${NEW_RELIC_LICENSE_KEY}
+  app_name: ${NEW_RELIC_APP_NAME:oficina-execution-service}
+  log_file_name: STDOUT
+  distributed_tracing:
+    enabled: true
+
+  apdex_t: 0.5
+
+  application_logging:
+    enabled: true
+    forwarding:
+      enabled: true
+      context_data:
+        enabled: true
+    local_decorating:
+      enabled: false
+    metrics:
+      enabled: true
+
+  transaction_tracer:
+    enabled: true
+    transaction_threshold: apdex_f
+
+  error_collector:
+    enabled: true
+    ignore_status_codes: 401,403,404,409,422
+
+  labels:
+    fase: tech-challenge-4
+
+production:
+  <<: *default_settings
+
+test:
+  <<: *default_settings
+  agent_enabled: false
