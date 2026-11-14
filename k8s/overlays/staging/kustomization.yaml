@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: execution-service-config
+      data:
+        ENV: staging
+        NEW_RELIC_APP_NAME: oficina-execution-service-staging
+        FILA_EXECUTION_COMANDOS: oficina-staging-execution-comandos
+        FILA_OS_EVENTOS: oficina-staging-os-eventos
+        FILA_DLQ: oficina-staging-execution-comandos-dlq
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: execution-service
+      spec:
+        template:
+          spec:
+            containers:
+              - name: execution-service
+                env:
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-XX:MaxRAMPercentage=70 -Djavax.net.ssl.trustStore=/opt/docdb/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"
+images:
+  - name: servico
+    newName: servico

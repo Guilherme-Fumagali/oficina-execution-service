@@ -1,0 +1,247 @@
+asyncapi: 2.6.0
+info:
+  title: Execution Service — mensageria
+  version: 1.0.0
+  description: |
+    Contrato assíncrono do Execution Service, derivado da SPEC-08. Consome comandos do orquestrador da saga
+    em `oficina-{env}-execution-comandos` e publica respostas e eventos em `oficina-{env}-os-eventos` por
+    meio do outbox. O consumo é idempotente por `mensagemId` e os comandos, pela chave de negócio `osId`.
+  license: {name: Apache 2.0, url: 'https://www.apache.org/licenses/LICENSE-2.0'}
+defaultContentType: application/json
+servers:
+  aws: {url: sqs.us-east-1.amazonaws.com, protocol: sqs, description: Amazon SQS com SSE-SQS e DLQ após 5 recebimentos.}
+  local: {url: 'localhost:4566', protocol: sqs, description: LocalStack 3 do docker-compose.}
+channels:
+  oficina-{env}-execution-comandos:
+    description: Comandos do orquestrador do OS Service; falha técnica devolve a mensagem à fila e, após 5 recebimentos, à DLQ.
+    parameters: {env: {$ref: '#/components/parameters/env'}}
+    publish:
+      operationId: receberComando
+      summary: Comandos consumidos pelo Execution Service.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/IniciarDiagnostico'
+          - $ref: '#/components/messages/ReabrirDiagnostico'
+          - $ref: '#/components/messages/IniciarReparo'
+          - $ref: '#/components/messages/CancelarExecucao'
+  oficina-{env}-os-eventos:
+    description: Respostas aos comandos e eventos da execução destinados ao orquestrador do OS Service.
+    parameters: {env: {$ref: '#/components/parameters/env'}}
+    subscribe:
+      operationId: publicarEvento
+      summary: Eventos publicados pelo Execution Service por meio do outbox.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExecucaoEnfileirada'
+          - $ref: '#/components/messages/DiagnosticoIniciado'
+          - $ref: '#/components/messages/DiagnosticoConcluido'
+          - $ref: '#/components/messages/ReparoIniciado'
+          - $ref: '#/components/messages/ExecucaoFinalizada'
+          - $ref: '#/components/messages/ExecucaoFalhou'
+          - $ref: '#/components/messages/ExecucaoCancelada'
+          - $ref: '#/components/messages/ComandoRejeitado'
+components:
+  parameters:
+    env:
+      description: Ambiente (`local` no docker-compose e nos testes).
+      schema: {type: string, enum: [local, staging, prod]}
+  messageTraits:
+    atributosSqs:
+      headers:
+        type: object
+        required: [tipo, versao]
+        properties:
+          tipo: {type: string, description: Igual ao campo `tipo` do envelope.}
+          versao: {type: string}
+          newrelic: {type: string, description: Rastreamento distribuído do New Relic, quando o agente está ativo.}
+          traceparent: {type: string, description: W3C Trace Context, quando o agente está ativo.}
+          tracestate: {type: string, description: W3C Trace Context, quando o agente está ativo.}
+  schemas:
+    Envelope:
+      type: object
+      required: [mensagemId, tipo, versao, osId, origem, ocorridoEm, dados]
+      properties:
+        mensagemId: {type: string, format: uuid, description: Novo a cada envio; chave da inbox do consumidor.}
+        tipo: {type: string}
+        versao: {type: integer, minimum: 1}
+        sagaId: {type: [string, 'null'], format: uuid}
+        osId: {type: string, format: uuid, description: Chave de negócio e `_id` do documento de execução.}
+        causadaPor: {type: [string, 'null'], format: uuid, description: '`mensagemId` do comando de origem; `null` em eventos disparados por pessoa.'}
+        origem: {type: string, enum: [os-service, billing-service, execution-service]}
+        ocorridoEm: {type: string, format: date-time}
+        dados: {type: object}
+    Uuid: {type: string, format: uuid}
+    Instante: {type: string, format: date-time}
+    Etapa: {type: string, enum: [DIAGNOSTICO, REPARO]}
+    Veiculo:
+      type: object
+      required: [placa]
+      properties:
+        placa: {type: string}
+        marca: {type: string}
+        modelo: {type: string}
+        anoFabricacao: {type: integer}
+    ItemReparo:
+      type: object
+      required: [tipo, descricao, quantidade]
+      properties:
+        tipo: {type: string, enum: [SERVICO, PECA]}
+        descricao: {type: string}
+        quantidade: {type: integer, minimum: 1}
+    DadosIniciarDiagnostico:
+      type: object
+      required: [clienteId, veiculo]
+      properties:
+        clienteId: {$ref: '#/components/schemas/Uuid'}
+        veiculo: {$ref: '#/components/schemas/Veiculo'}
+        abertaEm: {$ref: '#/components/schemas/Instante'}
+    DadosMotivo:
+      type: object
+      properties: {motivo: {type: string}}
+    DadosIniciarReparo:
+      type: object
+      required: [itens]
+      properties:
+        itens: {type: array, minItems: 1, items: {$ref: '#/components/schemas/ItemReparo'}}
+    DadosExecucaoEnfileirada:
+      type: object
+      required: [etapa, enfileiradaEm]
+      properties:
+        etapa: {$ref: '#/components/schemas/Etapa'}
+        enfileiradaEm: {$ref: '#/components/schemas/Instante'}
+    DadosInicioMecanico:
+      type: object
+      required: [mecanicoId, iniciadoEm]
+      properties:
+        mecanicoId: {$ref: '#/components/schemas/Uuid'}
+        iniciadoEm: {$ref: '#/components/schemas/Instante'}
+    DadosDiagnosticoConcluido:
+      type: object
+      required: [mecanicoId, concluidoEm, observacoes]
+      properties:
+        mecanicoId: {$ref: '#/components/schemas/Uuid'}
+        concluidoEm: {$ref: '#/components/schemas/Instante'}
+        observacoes: {type: string}
+    DadosExecucaoFinalizada:
+      type: object
+      required: [mecanicoId, finalizadaEm]
+      properties:
+        mecanicoId: {$ref: '#/components/schemas/Uuid'}
+        finalizadaEm: {$ref: '#/components/schemas/Instante'}
+    DadosExecucaoFalhou:
+      type: object
+      required: [mecanicoId, motivo, ocorridaEm]
+      properties:
+        mecanicoId: {$ref: '#/components/schemas/Uuid'}
+        motivo: {type: string}
+        ocorridaEm: {$ref: '#/components/schemas/Instante'}
+    DadosExecucaoCancelada:
+      type: object
+      required: [canceladaEm]
+      properties:
+        motivo: {type: [string, 'null']}
+        canceladaEm: {$ref: '#/components/schemas/Instante'}
+    DadosComandoRejeitado:
+      type: object
+      required: [comando, motivo, codigo]
+      properties:
+        comando: {type: string, description: Tipo do comando rejeitado.}
+        motivo: {type: string}
+        codigo: {type: string, enum: [EXECUCAO_INEXISTENTE, ESTADO_INVALIDO, DADOS_INVALIDOS, COMANDO_DESCONHECIDO]}
+  messages:
+    IniciarDiagnostico:
+      name: IniciarDiagnostico
+      summary: Cria a execução em `AGUARDANDO_DIAGNOSTICO`; responde `ExecucaoEnfileirada{etapa=DIAGNOSTICO}`.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: IniciarDiagnostico}, dados: {$ref: '#/components/schemas/DadosIniciarDiagnostico'}}
+    ReabrirDiagnostico:
+      name: ReabrirDiagnostico
+      summary: Volta `DIAGNOSTICO_CONCLUIDO` para `EM_DIAGNOSTICO` com apontamento automático; sem resposta.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ReabrirDiagnostico}, dados: {$ref: '#/components/schemas/DadosMotivo'}}
+    IniciarReparo:
+      name: IniciarReparo
+      summary: Enfileira o reparo após o pagamento; responde `ExecucaoEnfileirada{etapa=REPARO}`.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: IniciarReparo}, dados: {$ref: '#/components/schemas/DadosIniciarReparo'}}
+    CancelarExecucao:
+      name: CancelarExecucao
+      summary: Compensação da saga; responde `ExecucaoCancelada`.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: CancelarExecucao}, dados: {$ref: '#/components/schemas/DadosMotivo'}}
+    ExecucaoEnfileirada:
+      name: ExecucaoEnfileirada
+      summary: Resposta a `IniciarDiagnostico` e a `IniciarReparo`.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ExecucaoEnfileirada}, dados: {$ref: '#/components/schemas/DadosExecucaoEnfileirada'}}
+    DiagnosticoIniciado:
+      name: DiagnosticoIniciado
+      summary: Mecânico iniciou o diagnóstico.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: DiagnosticoIniciado}, dados: {$ref: '#/components/schemas/DadosInicioMecanico'}}
+    DiagnosticoConcluido:
+      name: DiagnosticoConcluido
+      summary: Mecânico concluiu o diagnóstico com observações.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: DiagnosticoConcluido}, dados: {$ref: '#/components/schemas/DadosDiagnosticoConcluido'}}
+    ReparoIniciado:
+      name: ReparoIniciado
+      summary: Mecânico iniciou o reparo.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ReparoIniciado}, dados: {$ref: '#/components/schemas/DadosInicioMecanico'}}
+    ExecucaoFinalizada:
+      name: ExecucaoFinalizada
+      summary: Mecânico concluiu o reparo.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ExecucaoFinalizada}, dados: {$ref: '#/components/schemas/DadosExecucaoFinalizada'}}
+    ExecucaoFalhou:
+      name: ExecucaoFalhou
+      summary: Falha registrada na etapa de reparo; dispara a compensação `FALHA_EXECUCAO`.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ExecucaoFalhou}, dados: {$ref: '#/components/schemas/DadosExecucaoFalhou'}}
+    ExecucaoCancelada:
+      name: ExecucaoCancelada
+      summary: Resposta a `CancelarExecucao`, repetida com os dados originais em caso de reenvio.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ExecucaoCancelada}, dados: {$ref: '#/components/schemas/DadosExecucaoCancelada'}}
+    ComandoRejeitado:
+      name: ComandoRejeitado
+      summary: Comando inválido para o estado da execução; a mensagem é reconhecida, sem nova tentativa.
+      traits: [{$ref: '#/components/messageTraits/atributosSqs'}]
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties: {tipo: {const: ComandoRejeitado}, dados: {$ref: '#/components/schemas/DadosComandoRejeitado'}}

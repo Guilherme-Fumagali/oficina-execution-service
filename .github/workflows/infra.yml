@@ -1,0 +1,114 @@
+name: Infra
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: 'Ação do Terraform'
+        type: choice
+        options:
+          - plan
+          - apply
+        default: plan
+
+permissions:
+  contents: read
+
+env:
+  AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+  TF_VAR_ambiente: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+
+defaults:
+  run:
+    working-directory: infra
+
+jobs:
+  validate:
+    name: Format & validate (infra)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.55.0
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: tflint --format compact
+      - name: Checkov
+        run: docker run --rm -v "$PWD:/repo" -w /repo bridgecrew/checkov:3.2.334 -d . --config-file .checkov.yaml
+
+  plan:
+    name: Plan (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["main", "develop"]'), github.ref_name)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      rede: ${{ steps.rede.outputs.existe }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Conferir rede do oficina-infra-k8s
+        id: rede
+        run: |
+          if SAIDA=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/vpc-id" 2>&1); then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          elif grep -q ParameterNotFound <<<"$SAIDA"; then
+            echo "::notice::Rede de ${AMBIENTE} não provisionada pelo oficina-infra-k8s, plan pulado."
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$SAIDA"
+            exit 1
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.rede.outputs.existe == 'true'
+        with:
+          terraform_version: "1.9.8"
+
+      - if: steps.rede.outputs.existe == 'true'
+        run: terraform init -backend-config="key=execution/${AMBIENTE}/terraform.tfstate"
+
+      - if: steps.rede.outputs.existe == 'true'
+        run: terraform plan
+
+  apply:
+    name: Apply (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && inputs.acao == 'apply' && needs.plan.outputs.rede == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - run: terraform init -backend-config="key=execution/${AMBIENTE}/terraform.tfstate"
+
+      - run: terraform apply -auto-approve

@@ -1,0 +1,668 @@
+{
+  "components" : {
+    "schemas" : {
+      "AlterarPrioridadeRequest" : {
+        "properties" : {
+          "prioridade" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "prioridade" ],
+        "type" : "object"
+      },
+      "ApontamentoResponse" : {
+        "properties" : {
+          "mecanicoId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "registradoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "texto" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ConcluirDiagnosticoRequest" : {
+        "properties" : {
+          "observacoes" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "observacoes" ],
+        "type" : "object"
+      },
+      "EtapaClienteResponse" : {
+        "properties" : {
+          "fim" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "inicio" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "tipo" : {
+            "enum" : [ "DIAGNOSTICO", "REPARO" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EtapaResponse" : {
+        "properties" : {
+          "fim" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "inicio" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "mecanicoId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tipo" : {
+            "enum" : [ "DIAGNOSTICO", "REPARO" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ExecucaoClienteResponse" : {
+        "properties" : {
+          "clienteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "enfileiradaEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "etapaAtual" : {
+            "enum" : [ "DIAGNOSTICO", "REPARO" ],
+            "type" : "string"
+          },
+          "etapas" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EtapaClienteResponse"
+            },
+            "type" : "array"
+          },
+          "historicoStatus" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HistoricoStatusResponse"
+            },
+            "type" : "array"
+          },
+          "itensReparo" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ItemReparoResponse"
+            },
+            "type" : "array"
+          },
+          "motivoCancelamento" : {
+            "type" : "string"
+          },
+          "motivoFalha" : {
+            "type" : "string"
+          },
+          "observacoesDiagnostico" : {
+            "type" : "string"
+          },
+          "osId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "DIAGNOSTICO_CONCLUIDO", "AGUARDANDO_REPARO", "EM_REPARO", "FINALIZADA", "FALHOU", "CANCELADA" ],
+            "type" : "string"
+          },
+          "veiculo" : {
+            "$ref" : "#/components/schemas/VeiculoResponse"
+          }
+        },
+        "type" : "object"
+      },
+      "ExecucaoResponse" : {
+        "properties" : {
+          "apontamentos" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ApontamentoResponse"
+            },
+            "type" : "array"
+          },
+          "clienteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "enfileiradaEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "etapaAtual" : {
+            "enum" : [ "DIAGNOSTICO", "REPARO" ],
+            "type" : "string"
+          },
+          "etapas" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EtapaResponse"
+            },
+            "type" : "array"
+          },
+          "historicoStatus" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HistoricoStatusResponse"
+            },
+            "type" : "array"
+          },
+          "itensReparo" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ItemReparoResponse"
+            },
+            "type" : "array"
+          },
+          "motivoCancelamento" : {
+            "type" : "string"
+          },
+          "motivoFalha" : {
+            "type" : "string"
+          },
+          "observacoesDiagnostico" : {
+            "type" : "string"
+          },
+          "osId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "prioridade" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sagaId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "DIAGNOSTICO_CONCLUIDO", "AGUARDANDO_REPARO", "EM_REPARO", "FINALIZADA", "FALHOU", "CANCELADA" ],
+            "type" : "string"
+          },
+          "veiculo" : {
+            "$ref" : "#/components/schemas/VeiculoResponse"
+          },
+          "versao" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ExecucaoResumoResponse" : {
+        "properties" : {
+          "clienteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "enfileiradaEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "etapaAtual" : {
+            "enum" : [ "DIAGNOSTICO", "REPARO" ],
+            "type" : "string"
+          },
+          "osId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "prioridade" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "DIAGNOSTICO_CONCLUIDO", "AGUARDANDO_REPARO", "EM_REPARO", "FINALIZADA", "FALHOU", "CANCELADA" ],
+            "type" : "string"
+          },
+          "veiculo" : {
+            "$ref" : "#/components/schemas/VeiculoResponse"
+          }
+        },
+        "type" : "object"
+      },
+      "HistoricoStatusResponse" : {
+        "properties" : {
+          "de" : {
+            "enum" : [ "AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "DIAGNOSTICO_CONCLUIDO", "AGUARDANDO_REPARO", "EM_REPARO", "FINALIZADA", "FALHOU", "CANCELADA" ],
+            "type" : "string"
+          },
+          "em" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "motivo" : {
+            "type" : "string"
+          },
+          "para" : {
+            "enum" : [ "AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "DIAGNOSTICO_CONCLUIDO", "AGUARDANDO_REPARO", "EM_REPARO", "FINALIZADA", "FALHOU", "CANCELADA" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ItemReparoResponse" : {
+        "properties" : {
+          "descricao" : {
+            "type" : "string"
+          },
+          "quantidade" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tipo" : {
+            "enum" : [ "SERVICO", "PECA" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RegistrarApontamentoRequest" : {
+        "properties" : {
+          "texto" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "texto" ],
+        "type" : "object"
+      },
+      "RegistrarFalhaRequest" : {
+        "properties" : {
+          "motivo" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "motivo" ],
+        "type" : "object"
+      },
+      "VeiculoResponse" : {
+        "properties" : {
+          "anoFabricacao" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "marca" : {
+            "type" : "string"
+          },
+          "modelo" : {
+            "type" : "string"
+          },
+          "placa" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Fila de execução, diagnóstico e reparo das ordens de serviço — Tech Challenge Fase 4 PosTech FIAP",
+    "title" : "Execution Service — Oficina Mecânica",
+    "version" : "1.0"
+  },
+  "openapi" : "3.0.1",
+  "paths" : {
+    "/api/execucoes" : {
+      "get" : {
+        "operationId" : "listar",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "DIAGNOSTICO_CONCLUIDO", "AGUARDANDO_REPARO", "EM_REPARO", "FINALIZADA", "FALHOU", "CANCELADA" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "etapa",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "DIAGNOSTICO", "REPARO" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ExecucaoResumoResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Consultar a fila de execução, por prioridade decrescente e depois por ordem de entrada",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}" : {
+      "get" : {
+        "operationId" : "buscar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [ {
+                    "$ref" : "#/components/schemas/ExecucaoResponse"
+                  }, {
+                    "$ref" : "#/components/schemas/ExecucaoClienteResponse"
+                  } ]
+                }
+              }
+            },
+            "description" : "Execução encontrada"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Consultar a execução de uma OS (cliente: apenas a própria, sem apontamentos e sem mecânico)",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/apontamentos" : {
+      "post" : {
+        "operationId" : "registrarApontamento",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegistrarApontamentoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Registrar apontamento do mecânico",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/diagnostico/conclusao" : {
+      "post" : {
+        "operationId" : "concluirDiagnostico",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConcluirDiagnosticoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Concluir o diagnóstico com as observações",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/diagnostico/inicio" : {
+      "post" : {
+        "operationId" : "iniciarDiagnostico",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Iniciar o diagnóstico (mecânico do token)",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/falha" : {
+      "post" : {
+        "operationId" : "registrarFalha",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegistrarFalhaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Registrar falha na execução do reparo (motivo obrigatório)",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/prioridade" : {
+      "patch" : {
+        "operationId" : "alterarPrioridade",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AlterarPrioridadeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Alterar a prioridade na fila (maior valor é atendido antes)",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/reparo/conclusao" : {
+      "post" : {
+        "operationId" : "concluirReparo",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Concluir o reparo e finalizar a execução",
+        "tags" : [ "Execuções" ]
+      }
+    },
+    "/api/execucoes/{osId}/reparo/inicio" : {
+      "post" : {
+        "operationId" : "iniciarReparo",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExecucaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Iniciar o reparo (mecânico do token)",
+        "tags" : [ "Execuções" ]
+      }
+    }
+  }
+}
