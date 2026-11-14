@@ -388,6 +388,14 @@ Cobertura medida pelo JaCoCo no `./mvnw verify`:
 
 O build falha abaixo dos mínimos. Ficam fora da medição apenas a classe `ExecutionServiceApplication` e as classes de configuração sem lógica do pacote `infrastructure/config` (`UseCaseConfig`, `MongoConfig`, `MensageriaConfig`, `OpenApiConfig`, `RelogioConfig`), listadas no `pom.xml`. O relatório HTML é publicado como artefato `jacoco-report` em cada execução do pipeline, e a cobertura também aparece no SonarCloud (badge no topo).
 
+Execução do pipeline em 14/11/2026, com o resumo de cobertura publicado pelo job `Build & Test` e o deploy em homologação:
+
+![Pipeline com o resumo de cobertura](docs/evidencias/pipeline-cobertura.jpg)
+
+Análise da branch `main` no [SonarCloud](https://sonarcloud.io/project/overview?id=Guilherme-Fumagali_oficina-execution-service), com o quality gate aprovado:
+
+![SonarCloud dos três serviços](docs/evidencias/sonarcloud-main.jpg)
+
 ```bash
 ./mvnw test      # requer Docker para o Testcontainers
 ./mvnw verify    # inclui o relatório em target/site/jacoco/index.html e os limites de cobertura
