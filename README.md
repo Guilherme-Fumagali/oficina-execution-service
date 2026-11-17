@@ -24,7 +24,7 @@ Serviço de execução do sistema de gestão de oficina mecânica, desenvolvido 
 | Contrato AsyncAPI 2.6 | [`docs/asyncapi.yaml`](docs/asyncapi.yaml), visualizável no [AsyncAPI Studio](https://studio.asyncapi.com/?url=https://raw.githubusercontent.com/Guilherme-Fumagali/oficina-execution-service/develop/docs/asyncapi.yaml) |
 | Swagger UI | `http://localhost:8082/swagger-ui.html` na execução local |
 | Decisões de arquitetura da fase | [ADR-016 a ADR-023](https://github.com/Guilherme-Fumagali/tech-challenge-1/blob/develop/docs/tech-challenge-4/adrs/README.md), em `docs/tech-challenge-4` do repositório tech-challenge-1 |
-| Vídeo de demonstração | a publicar |
+| Vídeo de demonstração | [youtu.be/dZqpV8ESU4s](https://youtu.be/dZqpV8ESU4s) |
 
 ## Arquitetura
 
@@ -387,6 +387,14 @@ Cobertura medida pelo JaCoCo no `./mvnw verify`:
 | Instruções | 99,00% | — |
 
 O build falha abaixo dos mínimos. Ficam fora da medição apenas a classe `ExecutionServiceApplication` e as classes de configuração sem lógica do pacote `infrastructure/config` (`UseCaseConfig`, `MongoConfig`, `MensageriaConfig`, `OpenApiConfig`, `RelogioConfig`), listadas no `pom.xml`. O relatório HTML é publicado como artefato `jacoco-report` em cada execução do pipeline, e a cobertura também aparece no SonarCloud (badge no topo).
+
+Execução do pipeline em 14/11/2026, com o resumo de cobertura publicado pelo job `Build & Test` e o deploy em homologação:
+
+![Pipeline com o resumo de cobertura](docs/evidencias/pipeline-cobertura.jpg)
+
+Análise da branch `main` no [SonarCloud](https://sonarcloud.io/project/overview?id=Guilherme-Fumagali_oficina-execution-service), com o quality gate aprovado:
+
+![SonarCloud dos três serviços](docs/evidencias/sonarcloud-main.jpg)
 
 ```bash
 ./mvnw test      # requer Docker para o Testcontainers
